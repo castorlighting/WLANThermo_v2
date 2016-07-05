@@ -26,10 +26,8 @@ import string
 import logging
 import RPi.GPIO as GPIO
 import urllib
-import urllib2
 import psutil
 import signal
-import traceback
 
 GPIO.setwarnings(False)
 GPIO.setmode(GPIO.BCM)
@@ -114,23 +112,7 @@ else:
     open(pidfilename, 'w').write(pid)
 
 
-separator = Config.get('Logging','Separator')
-
 # Funktionsdefinition
-
-##
-## Formatierung von Strings auch wenn ein key nicht existiert.
-##
-def safe_format(template, args):
-    for _ in xrange(100):
-        try:
-            message = template.format(**args)
-            break
-        except KeyError as e:
-            key = str(e).strip('\'')
-            template = template.replace('{' + key + '}', '!!!' + key + '!!!')
-    return message
-
 def alarm_email(SERVER,USER,PASSWORT,STARTTLS,FROM,TO,SUBJECT,MESSAGE):
     logger.info('Send mail!')
     
@@ -149,7 +131,7 @@ def alarm_email(SERVER,USER,PASSWORT,STARTTLS,FROM,TO,SUBJECT,MESSAGE):
         s.login(USER,PASSWORT)
         
 
-        m = text(MESSAGE, 'plain', 'UTF-8')
+        m = text(MESSAGE)
 
         m['Subject'] = SUBJECT
         m['From'] = FROM
@@ -176,7 +158,7 @@ def readAnalogData(adcChannel, SCLKPin, MOSIPin, MISOPin, CSPin):
     sendcmd |= 0b00011000 # Entspricht 0x18 (1:Startbit, 1:Single/ended)
     
     # Senden der Bitkombination (Es finden nur 5 Bits Beruecksichtigung)
-    for _ in xrange(5):
+    for i in range(5):
         if (sendcmd & 0x10): # (Bit an Position 4 pruefen. Zaehlung beginnt bei 0)
             GPIO.output(MOSIPin, HIGH)
         else:
@@ -186,11 +168,11 @@ def readAnalogData(adcChannel, SCLKPin, MOSIPin, MISOPin, CSPin):
         GPIO.output(SCLKPin, LOW)
         sendcmd <<= 1 # Bitfolge eine Position nach links schieben
     time.sleep(0.0001)    # 0.00001 erzeugte bei mir Raspi 2 Pest 90us
-    
+    #for p in range(19):
+    #    GPIO.output(SCLKPin,LOW)            
     # Empfangen der Daten des ADC
     adcvalue = 0 # Ruecksetzen des gelesenen Wertes
-        
-    for _ in xrange(13):
+    for i in range(13):
         GPIO.output(SCLKPin, HIGH)
         GPIO.output(SCLKPin, LOW)
         # print GPIO.input(MISOPin)
@@ -204,7 +186,7 @@ def readAnalogData(adcChannel, SCLKPin, MOSIPin, MISOPin, CSPin):
 def temperatur_sensor (Rt, typ): #Ermittelt die Temperatur
     name = Config_Sensor.get(typ,'name')
     
-    if not name in ('PT100', 'PT1000'):
+    if (name != 'PT100') and (name != 'PT1000'):
         a = Config_Sensor.getfloat(typ,'a')
         b = Config_Sensor.getfloat(typ,'b')
         c = Config_Sensor.getfloat(typ,'c')
@@ -213,6 +195,8 @@ def temperatur_sensor (Rt, typ): #Ermittelt die Temperatur
         try: 
             v = math.log(Rt/Rn)
             T = (1/(a + b*v + c*v*v)) - 273
+            if Config.get('plotter', 'temp_units') == 'F':
+            	T = T*1.8+32
         except: #bei unsinnigen Werten (z.B. ein- ausstecken des Sensors im Betrieb) Wert 999.9
             T = 999.9
     else:
@@ -224,69 +208,23 @@ def temperatur_sensor (Rt, typ): #Ermittelt die Temperatur
             Rpt=1
         try: 
             T = (-1)*math.sqrt( Rt/(Rpt*-0.0000005775) + (0.0039083**2)/(4*((-0.0000005775)**2)) - 1/(-0.0000005775)) - 0.0039083/(2*-0.0000005775)
+            if Config.get('plotter', 'temp_units') == 'F':
+            	T = T*1.8+32
         except:
             T = 999.9
+    
+
+
 
     return T
 
-def dateiname():
-    # Zeitstring fuer eindeutige Dateinamen erzeugen
-    # fn = YYYYMMDD_HHMMSS
-    fn = time.strftime('%Y%m%d_%H%M%S')
+def dateiname(): #Zeitstring fuer eindeutige Dateinamen erzeugen
+
+    zeit = time.localtime()
+    # fn = string.zfill(zeit[2],2)+string.zfill(zeit[1],2)+str(zeit[0])+string.zfill(zeit[3],2)+string.zfill(zeit[4],2)+string.zfill(zeit[5],2)
+    fn = str(zeit[0]) + string.zfill(zeit[1],2) + string.zfill(zeit[2],2) + "_" + string.zfill(zeit[3],2)+string.zfill(zeit[4],2)+string.zfill(zeit[5],2)
     return fn
 
-
-def create_logfile(filename, log_kanal):
-    # Falls der Symlink noch da ist, loeschen
-    try:
-        os.remove('/var/log/WLAN_Thermo/TEMPLOG.csv')
-    except:
-        pass
-    
-    # Symlink TEMPLOG.csv auf die gerade benutzte eindeutige Log-Datei legen.
-    os.symlink(filename, '/var/log/WLAN_Thermo/TEMPLOG.csv')
-    
-    kopfzeile = []
-    kopfzeile.append('Datum_Uhrzeit')
-    for kanal in xrange(8):
-        if (log_kanal[kanal]):
-            kopfzeile.append('Kanal ' + str(kanal))
-            
-    kopfzeile.append('Regler Ausgang')
-    kopfzeile.append('Regler Sollwert')
-    
-    while True:
-        try:
-            fw = open(filename,'w') #Datei anlegen
-            fw.write(separator.join(kopfzeile) + '\n') # Kopfzeile der CSV-Datei schreiben
-            fw.flush()
-            os.fsync(fw.fileno())
-            fw.close()
-        except IndexError:
-            time.sleep(1)
-            continue
-        break
-
-def median_filter(raw):
-    # Kombinierter Median und Mittelwertfilter
-    laenge = len(raw)
-    sortiert = sorted(raw)
-    # Mitte des Arrays finden
-    index = int(round(laenge * 0.4))
-    # Bereich für Mittelwertbildung festlegen area = 1 + ln(laenge)   Basis 2.7
-    area_groesse = 1 + int(round(math.log(laenge) ))
-    area = sortiert[index-area_groesse:index+area_groesse+1]
-    summe = sum(area)
-    anzahl = len(area)
-    # arithmetisches Mittel
-    wert = round(summe/anzahl , 2)
-    return wert
-
-def log_uncaught_exceptions(ex_cls, ex, tb):
-    logger.critical(''.join(traceback.format_tb(tb)))
-    logger.critical('{0}: {1}'.format(ex_cls, ex))
-
-sys.excepthook = log_uncaught_exceptions
 
 # Variablendefinition und GPIO Pin-Definition
 ADC_Channel = 0  # Analog/Digital-Channel
@@ -300,42 +238,134 @@ PWM         = 4
 IO          = 2
 #GPIO END
 
+
+# Kanalvariablen-Initialisierung
+Sensornummer_typ = ['ACURITE','ACURITE','ACURITE','ACURITE','ACURITE','ACURITE','ACURITE','ACURITE']
+Logkanalnummer = [True,True,True,True,True,True,True,True]
+temp_min =['0','0','0','0','0','0','0','0']
+temp_max =['0','0','0','0','0','0','0','0']
 #Hardwareversion einlesen
 version = Config.get('Hardware','version')
 
 #Log Dateinamen aus der config lesen
 current_temp = Config.get('filepath','current_temp')
 
-# Kanalvariablen-Initialisierung
-sensortyp = [0 for _ in xrange(8)]
-log_kanal = [0 for _ in xrange(8)]
-temp_min = [0 for _ in xrange(8)]
-temp_max = [0 for _ in xrange(8)]
-messwiderstand = [0 for _ in xrange(8)]
-kanal_name = [0 for _ in xrange(8)]
+#Sensortypen einlesen pro Kanal
+Sensornummer_typ[0] =  Config.get('Sensoren','CH0')
+Sensornummer_typ[1] =  Config.get('Sensoren','CH1')
+Sensornummer_typ[2] =  Config.get('Sensoren','CH2')
+Sensornummer_typ[3] =  Config.get('Sensoren','CH3')
+Sensornummer_typ[4] =  Config.get('Sensoren','CH4')
+Sensornummer_typ[5] =  Config.get('Sensoren','CH5')
+Sensornummer_typ[6] =  Config.get('Sensoren','CH6')
+Sensornummer_typ[7] =  Config.get('Sensoren','CH7')
+#Alarmwerte aus der conf lesen und temperaturen.csv erzeugen
 
-for kanal in xrange(8):
-    sensortyp[kanal] = Config.get('Sensoren','CH' + str(kanal))
-    log_kanal[kanal] = Config.getboolean('Logging','CH' + str(kanal))
-    temp_min[kanal] = Config.get('temp_min','temp_min' + str(kanal))
-    temp_max[kanal] = Config.get('temp_max','temp_max' + str(kanal))
-    messwiderstand[kanal] = Config.getfloat('Messen','Messwiderstand' + str(kanal))
-    kanal_name[kanal] = Config.get('ch_name','ch_name' + str(kanal))
+temp_min[0] = Config.get('temp_min','temp_min0')
+temp_min[1] = Config.get('temp_min','temp_min1')
+temp_min[2] = Config.get('temp_min','temp_min2')
+temp_min[3] = Config.get('temp_min','temp_min3')
+temp_min[4] = Config.get('temp_min','temp_min4')
+temp_min[5] = Config.get('temp_min','temp_min5')
+temp_min[6] = Config.get('temp_min','temp_min6')
+temp_min[7] = Config.get('temp_min','temp_min7')
+
+temp_max[0] = Config.get('temp_max','temp_max0')
+temp_max[1] = Config.get('temp_max','temp_max1')
+temp_max[2] = Config.get('temp_max','temp_max2')
+temp_max[3] = Config.get('temp_max','temp_max3')
+temp_max[4] = Config.get('temp_max','temp_max4')
+temp_max[5] = Config.get('temp_max','temp_max5')
+temp_max[6] = Config.get('temp_max','temp_max6')
+temp_max[7] = Config.get('temp_max','temp_max7')
+
+name ='/var/www/temperaturen.csv'
+while True:
+    try:
+        fw = open(name + '_tmp','w') #Datei anlegen
+        for i in range(8):
+            fw.write(temp_max[i] + '\n') # Alarm-Max-Werte schreiben
+        for i in range(8):
+            fw.write(temp_min[i] + '\n') # Alarm-Min-Werte schreiben
+        fw.flush()
+        os.fsync(fw.fileno())
+        fw.close()
+        os.rename(name + '_tmp', name)
+    except IndexError:
+        time.sleep(1)
+        continue
+    break
+
+
+
+#Loggingoptionen einlesen
+Logkanalnummer[0] =  Config.getboolean('Logging','CH0')
+Logkanalnummer[1] =  Config.getboolean('Logging','CH1')
+Logkanalnummer[2] =  Config.getboolean('Logging','CH2')
+Logkanalnummer[3] =  Config.getboolean('Logging','CH3')
+Logkanalnummer[4] =  Config.getboolean('Logging','CH4')
+Logkanalnummer[5] =  Config.getboolean('Logging','CH5')
+Logkanalnummer[6] =  Config.getboolean('Logging','CH6')
+Logkanalnummer[7] =  Config.getboolean('Logging','CH7')
 
 log_pitmaster =  Config.getboolean('Logging','pit_control_out')
+
+separator = Config.get('Logging','Separator')
 
 pit_tempfile = Config.get('filepath','pitmaster')
 
 #Soundoption einlesen
 sound_on = Config.getboolean('Sound','Beeper_enabled')
 
+#Einlesen, ueber wieviele Messungen integriert wird 
+iterations = Config.getint('Messen','Iterations')
+
+#delay zwischen jeweils 8 Messungen einlesen 
+delay = Config.getfloat('Messen','Delay')
+
+#Einlesen des Reihenwiderstandes zum Fuehler (Hardwareabhaengig!!) 
+messwiderstand = [47.00, 47.00, 47.00, 47.00, 47.00, 47.00, 47.00, 47.00]
+
+messwiderstand[0] = Config.getfloat('Messen','Messwiderstand0')
+messwiderstand[1] = Config.getfloat('Messen','Messwiderstand1')
+messwiderstand[2] = Config.getfloat('Messen','Messwiderstand2')
+messwiderstand[3] = Config.getfloat('Messen','Messwiderstand3')
+messwiderstand[4] = Config.getfloat('Messen','Messwiderstand4')
+messwiderstand[5] = Config.getfloat('Messen','Messwiderstand5')
+messwiderstand[6] = Config.getfloat('Messen','Messwiderstand6')
+messwiderstand[7] = Config.getfloat('Messen','Messwiderstand7')
+
+#Einlesen Email-Parameter fuer Alarmmeldung
+Email_alert = Config.getboolean('Email','email_alert')
+Email_server  = Config.get('Email','server')
+Email_auth = Config.getboolean('Email','auth')
+Email_user = Config.get('Email','username')
+Email_password = Config.get('Email','password')
+Email_from = Config.get('Email','email_from')
+Email_to = Config.get('Email','email_to')
+Email_subject = Config.get('Email','email_subject')
+Email_STARTTLS = Config.getboolean ('Email','starttls')
+
+#Einlesen WhatsApp-Parameter fuer Alarmmeldung
+WhatsApp_alert = Config.getboolean('WhatsApp','whatsapp_alert')
+WhatsApp_number = Config.get('WhatsApp','whatsapp_number')
+
 #Einlesen der Software-Version
 command = 'cat /var/www/header.php | grep \'] = "V\' | cut -c31-38'
 
 build = os.popen(command).read()
 
+#Einlesen Displayeinstellungen
+LCD = Config.getboolean('Display','lcd_present')
+
+#Einlesen der Push Nachrichten Einstellungen
+PUSH = Config.getboolean('Push', 'push_on')
+PUSH_URL = Config.get('Push', 'push_url')
+#
+
 #Einlesen der Logging-Option
 newfile = Config.getboolean('Logging','write_new_log_on_restart')
+
 
 # Pin-Programmierung
 GPIO.setup(SCLK, GPIO.OUT)
@@ -368,82 +398,111 @@ except:
 
 name = "/var/log/WLAN_Thermo/"  + dateiname() +'_TEMPLOG.csv' #eindeutigen Namen generieren 
 if (newfile):# neues File beim Start anlegen
-    create_logfile(name, log_kanal)
+    
+    # Falls der Symlink noch da ist, loeschen
+    try:
+        os.remove('/var/log/WLAN_Thermo/TEMPLOG.csv')
+    except:
+        pass
+
+    os.symlink(name, '/var/log/WLAN_Thermo/TEMPLOG.csv') #Symlink TEMPLOG.csv auf die gerade zu benutzte eindeutige Log-Datei legen.
+    kopfzeile='Datum_Uhrzeit' 
+    for kanal in range(8):
+        if (Logkanalnummer[kanal]):
+            kopfzeile = kopfzeile + separator +  'Kanal ' + str(kanal)
+            
+    if log_pitmaster:
+        kopfzeile + separator +  'Reglerausgang'
+    
+    kopfzeile = kopfzeile +'\n'
+    
+    while True:
+        try:
+            fw = open(name,'w') #Datei anlegen
+            fw.write(kopfzeile) # Kopfzeile der CSV-Datei schreiben
+            fw.flush()
+            os.fsync(fw.fileno())
+            fw.close()
+        except IndexError:
+            time.sleep(1)
+            continue
+        break
+
 else:
     #Kein neues File anlegen
     if os.path.exists('/var/log/WLAN_Thermo/TEMPLOG.csv'):
         # pruefen, ob die Datei schon da ist zum anhaengen, auch False bei Broken Link!
         name = '/var/log/WLAN_Thermo/TEMPLOG.csv'
     else:
-        create_logfile(name, log_kanal)
+        # Falls der Symlink noch da ist, loeschen
+        try:
+            os.remove('/var/log/WLAN_Thermo/TEMPLOG.csv')
+        except:
+            pass
+         
+        os.symlink(name, '/var/log/WLAN_Thermo/TEMPLOG.csv')
+        kopfzeile='Datum_Uhrzeit'
+        
+        for kanal in range(8):
+            if (Logkanalnummer[kanal]):
+                kopfzeile = kopfzeile + separator +  'Kanal ' + str(kanal)
+        
+        if log_pitmaster:
+            kopfzeile + separator +  'Reglerausgang'
+        
+        kopfzeile = kopfzeile +'\n'
+        # Datei noch nicht vorhanden, doch neu anlegen!
+        while True:
+            try:
+                fw = open(name,'w')
+                fw.write(kopfzeile) # Kopfzeile der CSV-Datei schreiben
+                fw.flush()
+                os.fsync(fw.fileno())
+                fw.close()
+            except IndexError:
+                time.sleep(1)
+                continue
+            break
+        
 
-new_config = ConfigParser.SafeConfigParser()
+
+#Alarmstatusspeicher loeschen
+Alarm_state_high_previous = 0
+Alarm_state_low_previous = 0
+
 Temperatur = [0.10,0.10,0.10,0.10,0.10,0.10,0.10,0.10]
 
 alarm_state = [None, None, None, None, None, None, None, None]
-test_alarm = False
-config_mtime = 0
-alarm_time = 0
 
 try:
-    while True:
-        time_start = time.time()
+    while True: #Messchleife
         CPU_usage = psutil.cpu_percent(interval=1, percpu=True)
-        ram = psutil.virtual_memory()
+        ram = psutil.phymem_usage()
         ram_free = ram.free / 2**20
         logger.debug('CPU: ' + str(CPU_usage) + ' RAM free: ' + str(ram_free))
         alarm_irgendwo = False
         alarm_neu = False
-        alarm_repeat = False
-        alarme = []
-        statusse = []
-        
+        Alarm_message = 'Achtung!\n'
+        Alarm_high = [999,999,999,999,999,999,999,999]
+        Alarm_low = [0,0,0,0,0,0,0,0]
+        # Temperatur = [0.10,0.10,0.10,0.10,0.10,0.10,0.10,0.10] ausserhalb der Schleife um im Fehlerfall den Vorgängerwert zu nehmen
         Temperatur_string = ['999.9','999.9','999.9','999.9','999.9','999.9','999.9','999.9']
         Temperatur_alarm = ['er','er','er','er','er','er','er','er']
         Displaytemp = ['999.9','999.9','999.9','999.9','999.9','999.9','999.9','999.9']
 
-        new_config_mtime = os.path.getmtime('/var/www/conf/WLANThermo.conf')
-        if new_config_mtime > config_mtime:
-            logger.debug('lese Konfiguration neu...')
-            while True:
-                try:
-                    new_config.read('/var/www/conf/WLANThermo.conf')
-                except IndexError:
-                    time.sleep(1)
-                    continue
-                break
-            config_mtime = new_config_mtime
+        while True:
+            try:
+                af = open("/var/www/temperaturen.csv") #Datei mit den Alarmwerten einlesen
+            except IndexError:
+                time.sleep(1)
+                continue
+            break
         
-        pit_on = new_config.getboolean('ToDo','pit_on')
-        
-        for kanal in xrange (8):
-            temp_max[kanal] = new_config.getfloat('temp_max','temp_max' + str(kanal))
-            temp_min[kanal] = new_config.getfloat('temp_min','temp_min' + str(kanal))
-            messwiderstand[kanal] = new_config.getfloat('Messen','Messwiderstand' + str(kanal))
-            sensortyp[kanal] = new_config.get('Sensoren','CH' + str(kanal))
-            kanal_name[kanal] = new_config.get('ch_name','ch_name' + str(kanal))
-            
-        #Soundoption einlesen
-        sound_on = new_config.getboolean('Sound','Beeper_enabled')
-
-        #Einlesen, ueber wieviele Messungen integriert wird 
-        iterations = new_config.getint('Messen','Iterations')
-
-        #delay zwischen jeweils 8 Messungen einlesen 
-        delay = new_config.getfloat('Messen','Delay')
-        
-        # Allgemeine Alarmeinstellungen
-        alarm_high_template = new_config.get('Alert', 'alarm_high_template')
-        alarm_low_template = new_config.get('Alert', 'alarm_low_template')
-        status_template = new_config.get('Alert', 'status_template')
-        message_template = new_config.get('Alert', 'message_template')
-        status_interval = new_config.getint('Alert', 'status_interval')
-        alarm_interval = new_config.getint('Alert', 'alarm_interval')
-
-        # Einlesen welche Alarmierungsart aktiv ist
-        Email_alert = new_config.getboolean('Email','email_alert')
-        WhatsApp_alert = new_config.getboolean('WhatsApp','whatsapp_alert')
-        Push_alert = new_config.getboolean('Push', 'push_on')
+        for i in range (8):
+            Alarm_high[i] = int(af.readline())
+        for i in range (8):
+            Alarm_low[i] = int(af.readline())
+        af.close()
         
         if os.path.isfile('/var/www/alert.ack'):
             logger.info('alert.ack vorhanden')
@@ -456,108 +515,88 @@ try:
                     alarm_state[kanal] = 'lo_ack'
             os.unlink('/var/www/alert.ack')
         
-        if os.path.isfile('/var/www/alert.test'):
-            logger.info('alert.test vorhanden')
-            test_alarm = True
-            os.unlink('/var/www/alert.test')
-        
-        
-        for kanal in xrange(8):
-            sensorname = Config_Sensor.get(sensortyp[kanal],'Name')
+        guteArray = []
+        for kanal in range (8): #Maximal 8 Kanaele abfragen
+            sensortyp = Sensornummer_typ[kanal]
+            sensorname = Config_Sensor.get(sensortyp,'Name')
             Temp = 0.0
+            gute = 0
             WerteArray = []
-            for i in xrange(iterations):
-                # Anzahl iterations Werte messen und Durchschnitt bilden
-                if version == 'v1' or sensorname == 'KTYPE':
-                    # Nicht invertiert messen
-                    Wert = readAnalogData(kanal, SCLK, MOSI, MISO, CS)
-                else:
-                    # Spannungsteiler ist nach v1 anders herum aufgebaut
-                    Wert = 4095 - readAnalogData(kanal, SCLK, MOSI, MISO, CS)
+            for i in range (iterations): #Anzahl iterations Werte messen und Durchschnitt bilden
+                ADC_Channel = kanal
+                if (version=='v1'):
+                    Wert = readAnalogData(ADC_Channel, SCLK, MOSI, MISO, CS)
                     
-                if (Wert > 60) and (sensorname != 'KTYPE'):
-                    # sinnvoller Wertebereich
-                    Rtheta = messwiderstand[kanal]*((4096.0/Wert) - 1)
-                    Tempvar = temperatur_sensor(Rtheta,sensortyp[kanal])
-                    if Tempvar <> 999.9:
-                        # normale Messung, keine Sensorprobleme
-                        WerteArray.append(Tempvar)
-                elif sensorname == 'KTYPE':
-                    # AD595 = 10mV/°C
-                    Temperatur[kanal] = Wert * 330/4096
                 else:
-                    Temperatur[kanal] = 999.9
-                        
+                    Wert = 4096 - readAnalogData(ADC_Channel, SCLK, MOSI, MISO, CS)
+                    
+                if (Wert > 60) and (sensorname != 'KTYPE'): #sinnvoller Wertebereich
+                    Rtheta = messwiderstand[kanal]*((4096.0/Wert) - 1)
+                    Tempvar = temperatur_sensor(Rtheta,sensortyp)
+                    if Tempvar <> 999.9: #normale Messung, keine Sensorprobleme
+                        gute = gute + 1
+                        WerteArray.append(Tempvar)
+                   #     Temp = Temp + Tempvar
+                   #     Temperatur[kanal] = round(Temp/gute,2)
+                   # else:
+                   #     if (gute==0):
+                   #         Temperatur[kanal]  = 999.9 # Problem waehrend des Messzyklus aufgetreten, Errorwert setzen
+                else:
+                    if sensorname=='KTYPE':
+                        # AD595 = 10mV/°C
+                        Temperatur[kanal] = Wert * 330/4096
+                    else:
+                        Temperatur[kanal] = 999.9 # kein sinnvoller Messwert, Errorwert setzen
             if (sensorname != 'KTYPE'):
-                gute = len(WerteArray)
-                if (gute > (iterations * 0.6)):
-                    # Messwerte nur gültig wenn x% OK sind
-                    # Medianfilter anwenden
-                    Temperatur[kanal] = median_filter(WerteArray)
+                guteArray.append(gute)
+                if (gute > (iterations *0.6)):              # Messwerte nur gültig wenn x% OK sind
+                    sortiertWerte = sorted(WerteArray)      # sortiert Werte der Größe nach
+                    index = int(round(gute * 0.4))          # ca Mitte des sortierten Arrays.( 40% weil es mehr
+                                                            # Ausrutscher nach oben gibt )
+                    Count = 1 + int(round(math.log(gute) )) # Count = 1 + ln(gute)   Basis 2.7
+                    for m in range(Count):                  # mehrere Werte aus der Mitte
+                        Temp += sortiertWerte[index-m] + sortiertWerte[index+m]
+                    Temperatur[kanal]=round(Temp/(Count * 2.0) , 2)    # arithmetisches Mittel
+                    sortiertWerte = []
                     #else:
                     #    # Behalte alten Wert 
                     #    Temperatur[kanal] = Temperatur[kanal] 
-                elif (gute <= 0):
+                if (gute <= 0):
                     Temperatur[kanal] = 999.9               # kein sinnvoller Messwert, Errorwert setzen
+            WerteArray = []
             if (gute <> iterations) and (gute > 0):
                 warnung = 'Kanal: ' + str(kanal) + ' konnte nur ' + str(gute) + ' von ' +  str(iterations) + ' messen!!'
-                logger.warning(warnung)
-                
-            alarm_values = dict()
-            alarm_values['kanal'] = kanal
-            alarm_values['name'] = kanal_name[kanal]
-            alarm_values['temperatur'] = Temperatur[kanal]
-            alarm_values['temp_max'] = temp_max[kanal]
-            alarm_values['temp_min'] = temp_min[kanal]
-            alarm_values['lf'] = '\n'
-            
+                logger.warning(warnung) 
             if Temperatur[kanal] <> 999.9:    
-                Temperatur_string[kanal] = "%.2f" % Temperatur[kanal]
+                Temperatur_string[kanal] = "%.1f" % Temperatur[kanal]
                 Temperatur_alarm[kanal] = 'ok'
-                
-                if Temperatur[kanal] >= temp_max[kanal]:
-                    # Temperatur über Grenzwert
+                if Temperatur[kanal] >= Alarm_high[kanal]:
                     if alarm_state[kanal] == 'hi':
-                        # Nicht quittierter Alarm
                         alarm_irgendwo = True
                     elif alarm_state[kanal] == 'hi_ack':
-                        # Alarm bereits quittiert
                         pass
                     else:
-                        # Neuer Alarm
                         alarm_irgendwo = True
                         alarm_neu = True
                         alarm_state[kanal] = 'hi'
-                    alarme.append(safe_format(alarm_high_template, alarm_values))
+                    Alarm_message = Alarm_message + 'Kanal ' + str(kanal) + ' hat Uebertemperatur!\n' + str(Temperatur[kanal]) + ' Grad Celsius !!! \n'
                     Temperatur_alarm[kanal] = 'hi'
-                elif Temperatur[kanal] <= temp_min[kanal]:
-                    # Temperatur unter Grenzwert
+                    #Temperatur_string[kanal] = chr(1) + "%.1f" % Temperatur[kanal]
+                elif Temperatur[kanal] <= Alarm_low[kanal]:
                     if alarm_state[kanal] == 'lo':
-                        # Nicht quittierter Alarm
                         alarm_irgendwo = True
                     elif alarm_state[kanal] == 'lo_ack':
-                        # Alarm bereits quittiert
                         pass
                     else:
-                        # Neuer Alarm
                         alarm_irgendwo = True
                         alarm_neu = True
                         alarm_state[kanal] = 'lo'
-                    alarme.append(safe_format(alarm_low_template, alarm_values))
+                    Alarm_message = Alarm_message + 'Kanal ' + str(kanal) + ' hat Untertemperatur!\n' + str(Temperatur[kanal]) + ' Grad Celsius !!! \n'
                     Temperatur_alarm[kanal] = 'lo'
+                    #Temperatur_string[kanal] = chr(0) + "%.1f" % Temperatur[kanal]
                 else:
-                    # Temperatur innerhalb der Grenzwerte
-                    statusse.append(safe_format(status_template, alarm_values))
                     alarm_state[kanal] = 'ok'
-        
-        message_values = dict()
-        message_values['alarme'] = ''.join(alarme)
-        message_values['statusse'] = ''.join(statusse)
-        message_values['lf'] = '\n'
-        
-        alarm_message = safe_format(message_template, message_values)
-            
-        
+                    
         # Beeper bei jedem unquittiertem Alarm
         if alarm_irgendwo:
             if sound_on:
@@ -573,100 +612,59 @@ try:
                 GPIO.output (BEEPER, HIGH)
                 time.sleep(0.2)
                 GPIO.output (BEEPER, LOW)
-            if alarm_interval > 0 and alarm_time + alarm_interval < time.time():
-                # Alarm erneut senden
-                alarm_repeat = True
-                alarm_time = time.time()
-        
-        if status_interval > 0 and alarm_time + status_interval < time.time():
-            # Periodisch den Status senden, wenn gewünscht
-            alarm_repeat = True
-
-        # Nachrichten senden
-        if alarm_neu or test_alarm or alarm_repeat:
-            alarm_time = time.time()
+                
+        # Nachrichten bei neuem Alarm senden
+        if alarm_neu:
+            logger.debug('Neuer Alarm, versende Nachrichten')
+            if Email_alert: #wenn konfiguriert, email schicken
+                alarm_email(Email_server,Email_user,Email_password, Email_STARTTLS, Email_from, Email_to, Email_subject, Alarm_message)
             
-            if alarm_neu:
-                logger.debug('Neuer Alarm, versende Nachrichten')
-            if test_alarm:
-                logger.debug('Testalarm, versende Nachrichten')
-                test_alarm = False
-                alarm_message = 'Testnachricht\n' + alarm_message
-            if alarm_repeat:
-                logger.info('Wiederholter Alarm, versende Nachrichten')
-                
-            if Email_alert:
-                # Wenn konfiguriert, Email schicken
-                Email_server  = new_config.get('Email','server')
-                Email_auth = new_config.getboolean('Email','auth')
-                Email_user = new_config.get('Email','username')
-                Email_password = new_config.get('Email','password')
-                Email_from = new_config.get('Email','email_from')
-                Email_to = new_config.get('Email','email_to')
-                Email_subject = new_config.get('Email','email_subject')
-                Email_STARTTLS = new_config.getboolean ('Email','starttls')
-                
-                alarm_email(Email_server,Email_user,Email_password, Email_STARTTLS, Email_from, Email_to, Email_subject, alarm_message)
-            if WhatsApp_alert:
-                # Wenn konfiguriert, Alarm per WhatsApp schicken
-                WhatsApp_number = new_config.get('WhatsApp','whatsapp_number')
-                        
-                cmd="/usr/sbin/sende_whatsapp.sh " + WhatsApp_number + " '" + alarm_message + "'"
+            if WhatsApp_alert: #wenn konfiguriert, Alarm per WhatsApp schicken
+                cmd="/usr/sbin/sende_whatsapp.sh " + WhatsApp_number + " '" + Alarm_message + "'"
                 os.system(cmd)
-            if Push_alert:
-                # Wenn konfiguriert, Alarm per Pushnachricht schicken
-                Push_URL = new_config.get('Push', 'push_url')
-                Push_Body = new_config.get('Push', 'push_body')
-                Push_inst_id = new_config.get('Push', 'push_inst_id')
-                Push_device = new_config.get('Push', 'push_device')
-                Push_inst_id2 = new_config.get('Push', 'push_inst_id2')
-                Push_device2 = new_config.get('Push', 'push_device2')
-                Push_inst_id3 = new_config.get('Push', 'push_inst_id3')
-                Push_device3 = new_config.get('Push', 'push_device3')
-                Push_chat_id = new_config.get('Push', 'push_chat_id')
-                Push_token = new_config.get('Push', 'push_token')
+            if PUSH:
+                Alarm_message2 = urllib.quote(Alarm_message)
+                push_cmd =  PUSH_URL.replace('messagetext', Alarm_message2.replace('\n', '<br/>'))
+                push_cmd = 'wget -q -O - ' + push_cmd
+                logger.debug(push_cmd)
+                os.popen(push_cmd)
         
-                alarm_message2 = urllib.quote(alarm_message)
-                url = Push_URL.format(messagetext=urllib.quote(alarm_message).replace('\n', '<br/>'), inst_id=Push_inst_id, device=Push_device, inst_id2=Push_inst_id2, device2=Push_device2, inst_id3=Push_inst_id3, device3=Push_device3, chat_id=Push_chat_id, token=Push_token)
-                body = Push_Body.format(messagetext=urllib.quote(alarm_message).replace('\n', '<br/>'), inst_id=Push_inst_id, device=Push_device, inst_id2=Push_inst_id2, device2=Push_device2, inst_id3=Push_inst_id3, device3=Push_device3, chat_id=Push_chat_id, token=Push_token)
-                try: 
-                    if Push_Body == '':
-                        logger.debug('Push GET-Request, URL: ' + url)
-                        response = urllib2.urlopen(url)
-                    else:
-                        logger.debug('Push POST-Request, URL: ' + url + '\nBody: ' + body)
-                        response = urllib2.urlopen(url, body)
-                    
-                    logger.info('Push HTTP-Returncode: ' + str(response.getcode()))
-                    logger.debug('Push URL: ' + response.geturl())
-                    logger.debug('Push Ergebniss: ' + response.read(500))
-
-                except urllib2.HTTPError, e:
-                    logger.error('HTTP Fehler: ' + str(e.code) + ' - ' + e.read(500))
-                except urllib2.URLError, e:
-                    logger.error('URLError: ' + str(e.reason))  
+        #Temperaturen fuer Display anzeige aufbereiten
+        if LCD:
+            for kanal in range(8):
+                Displaytemp[kanal] = Temperatur_string[kanal]
+                
+        new_config = ConfigParser.SafeConfigParser()
+        while True:
+            try:
+                new_config.read('/var/www/conf/WLANThermo.conf')
+            except IndexError:
+                time.sleep(1)
+                continue
+            break
+        
+        pit_on = new_config.getboolean('ToDo','pit_on')
         
         # Log datei erzeugen
-        lcsv = []
-        Uhrzeit_lang = time.strftime('%d.%m.%y %H:%M:%S')
+        lt = time.localtime()#  Uhrzeit des Messzyklus
+        jahr, monat, tag, stunde, minute, sekunde = lt[0:6]
+        Uhrzeit = string.zfill(stunde,2) + ':' + string.zfill(minute,2)+ ':' + string.zfill(sekunde,2)
+        Uhrzeit_lang = string.zfill(tag,2) + '.' + string.zfill(monat,2) + '.' + string.zfill((jahr-2000),2) + ' ' + Uhrzeit
         logdatei = os.readlink('/var/log/WLAN_Thermo/TEMPLOG.csv')
         logdatei = logdatei[21:-4]
-        lcsv.append(Uhrzeit_lang)
+        lcsv = Uhrzeit_lang 
         t = ""
-        for kanal in xrange(8):
-            # 8 Felder mit allen Temperaturen
-            lcsv.append(str(Temperatur_string[kanal]))
-        for kanal in xrange(8):
-            # 8 Felder mit allen Alarmzuständen
-            lcsv.append(Temperatur_alarm[kanal])
-        lcsv.append(build)
-        lcsv.append(logdatei)
+        for kanal in range(8):# eine Zeile mit allen Temperaturen
+            lcsv = lcsv + ";" + str(Temperatur_string[kanal])
+        for kanal in range(8):# eine Zeile mit allen alarm Temperaturen
+            lcsv = lcsv + ";" + Temperatur_alarm[kanal]
+        lcsv = lcsv + ";" + build + ";" + logdatei
         
         
         while True:
             try:
                 fcsv = open(current_temp  + '_tmp', 'w')
-                fcsv.write(';'.join(lcsv))
+                fcsv.write(lcsv)
                 fcsv.flush()
                 os.fsync(fcsv.fileno())
                 fcsv.close()
@@ -678,34 +676,26 @@ try:
             break
             
         #Messzyklus protokollieren und nur die Kanaele loggen, die in der Konfigurationsdatei angegeben sind
-        log_line = []
-        log_line.append(Uhrzeit_lang)
+        schreiben = Uhrzeit_lang
+        for i in range(8):
+           if (Logkanalnummer[i]):
+              schreiben = schreiben + separator + str(Temperatur[i])
         
-        for i in xrange(8):
-            if (log_kanal[i]):
-                log_line.append(str(Temperatur[i]))
-        
-        if pit_on:
-            try:
-                with open(pit_tempfile,'r') as pitfile:
-                    pit_values = pitfile.readline().split(';')
-                    pit_new = pit_values[3].rstrip('%')
-                    pit_set = pit_values[1]
-                    log_line.append(pit_new)
-                    log_line.append(pit_set)
-            except IOError:
-                # Wenn keine aktuellen Werte verfügbar sind, leere Werte schreiben
-                log_line.append('')
-                log_line.append('')
-        else:
-                log_line.append('')
-                log_line.append('')
+        if log_pitmaster:
+            schreiben += separator
+            if pit_on:
+                try:
+                    with open(pit_tempfile,'r') as pitfile:
+                        pit_new = pitfile.readline().split(';')[3].rstrip('%')
+                        schreiben += pit_new
+                except IOError:
+                    pass
         
         while True:
             try:
                 # Generierung des Logfiles
-                logfile = open(name,'a')
-                logfile.write(separator.join(log_line) + '\n')
+                logfile = open(name,'a')#logfile oeffnen
+                logfile.write(schreiben + '\n')
                 logfile.flush()
                 os.fsync(logfile.fileno())
                 logfile.close()
@@ -713,15 +703,9 @@ try:
                 time.sleep(1)
                 continue
             break
-        # Werte loggen
-        logger.debug(separator.join(log_line))
+        logger.debug(schreiben) # nur relevant wenn nicht als Dienst gestartet. Man sieht die aktuelle Logzeile
         
-        time_remaining = time_start + delay - time.time()
-        if time_remaining < 0:
-            logger.warning('Messchleife lief länger als {delay}s, Restzeit {time_remaining}s'.format(delay=delay, time_remaining=time_remaining))
-        else:
-            logger.debug('Messchleife Restzeit {time_remaining}s von {delay}s'.format(delay=delay, time_remaining=time_remaining))
-            time.sleep(time_remaining)
+        time.sleep(delay)
 
 except KeyboardInterrupt:
     logger.info('WLANThermo stopped!')

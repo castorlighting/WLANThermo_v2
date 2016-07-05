@@ -18,10 +18,10 @@ $directory_png = './thermoplot/';
 // Kontrollieren ob Symlink existiert, ansonst erstellen ##############################################################################
 //-------------------------------------------------------------------------------------------------------------------------------------
 
-if (!is_link("./thermolog")) {	//Überprüfen ob Symlink existiert
+if (!is_link("./thermolog")) {	//Check if log exists
 	$output = shell_exec('ln -s /var/log/WLAN_Thermo /var/www/thermolog'); 	//Symlink erstellen
 	echo "<pre>$output</pre>";												//Symlink erstellen	
-	echo "  <head> <meta http-equiv=\"refresh\" content=\"1;URL='../thermolog.php'\"> </head> <body> <h2>Symlink wird erstellt...</h2></body>";
+	echo "  <head> <meta http-equiv=\"refresh\" content=\"1;URL='../thermolog.php'\"> </head> <body> <h2>Logfile is created...</h2></body>";
 } 
 
 //-------------------------------------------------------------------------------------------------------------------------------------
@@ -29,7 +29,7 @@ if (!is_link("./thermolog")) {	//Überprüfen ob Symlink existiert
 //-------------------------------------------------------------------------------------------------------------------------------------
 if(isset($_POST['submit'])) { 
 
-	if (isset($_POST) && count($_POST) > 0 ) {	// Alle $_POST Variablen in einer schleife Überprüfen
+	if (isset($_POST) && count($_POST) > 0 ) {	// Check all $_POST variables in a loop
 		echo "<ul>";
 		foreach($_POST as $key => $value) {
 
@@ -48,7 +48,7 @@ if(isset($_POST['submit'])) {
 	}  
 	echo "</div>";
 	echo "<div class=\"infofield\">";
-	echo "<head> <meta http-equiv=\"refresh\" content=\"1;URL='../thermolog.php'\"> </head> <body> <h2>Files werden gel&ouml;scht...</h2></body>";
+	echo "<head> <meta http-equiv=\"refresh\" content=\"1;URL='../thermolog.php'\"> </head> <body> <h2>Files have been deleted...</h2></body>";
 	echo "</div>";
 	
 }else{
@@ -61,7 +61,7 @@ if(isset($_POST['submit'])) {
 // Ausgabe der Tabellen (in einer Schleife): ##########################################################################################
 //-------------------------------------------------------------------------------------------------------------------------------------
 	
-	echo '<h1>Thermolog Ordner</h1>';
+	echo '<h1>Logfile Folder</h1>';
 	
 //-------------------------------------------------------------------------------------------------------------------------------------
 // Tabellenkopf und fuß ###############################################################################################################
@@ -71,12 +71,12 @@ if(isset($_POST['submit'])) {
 	<table>
 		<thead>
 			<tr>
-				<th>Dateiname</th>
+				<th>Filename</th>
 				<th>D/L</th>
 				<th>Plot</th>
-				<th>Dateigr&ouml;&szlig;e</th>
-				<th>letzte &Auml;nderung</th>
-				<th>L&ouml;schen</th>
+				<th>File Size</th>
+				<th>Last Updated</th>
+				<th>Delete</th>
 			</tr>
 		</thead>
 		<tfoot>

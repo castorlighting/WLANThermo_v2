@@ -1,7 +1,7 @@
 <?php
 error_reporting(E_ALL);
 ini_set('display_errors', TRUE);
-$_SESSION["webGUIversion"] = "V2.4.0-0rc4";
+$_SESSION["webGUIversion"] = "v2.3.1-1";
 $title = "WLAN Thermometer";
 $document_root = getenv('DOCUMENT_ROOT');
 ?>
@@ -62,10 +62,10 @@ $document_root = getenv('DOCUMENT_ROOT');
 				<nav>
 					<ul>
 						<li class = "shutdown_menu">
-							<a href="#" class="mainmenu"><img src="../images/icons32x32/shutdown.png" alt="Home" title="Shutdown"></a>
+							<a href="#" class="mainmenu"><img src="../images/icons32x32/shutdown.png" alt="Shutdown" title="Shutdown"></a>
 							<ul>
-								<li><a href="../control/shutdown.php?id=reboot"><b>Neu starten</b></a></li>
-								<li><a href="../control/shutdown.php?id=shutdown"><b>Herunterfahren</b></a></li>
+								<li><a href="../control/shutdown.php?id=reboot"><b>Reboot</b></a></li>
+								<li><a href="../control/shutdown.php?id=shutdown"><b>Shut Down</b></a></li>
 							</ul>
 						</li>
 						<li>
@@ -75,13 +75,13 @@ $document_root = getenv('DOCUMENT_ROOT');
 							<a href="../info.php" class="mainmenu"><img src="../images/icons32x32/info.png" alt="Info" title="Info"></a>
 						</li>
 						<li>
-							<a href="../control/wifi.php" class="mainmenu"><img src="../images/icons32x32/wifi.png" alt="Home" title="WiFi Einstellungen"></a>
+							<a href="../control/wifi.php" class="mainmenu"><img src="../images/icons32x32/wifi.png" alt="WiFi" title="WiFi Settings"></a>
 						</li>
 						<li>
-							<a href="../control/config.php" class="mainmenu"><img src="../images/icons32x32/thermo.png" alt="Temp Einstellen" title="Einstellungen"></a>
+							<a href="../control/config.php" class="mainmenu"><img src="../images/icons32x32/thermo.png" alt="Temp Setting" title="Settings"></a>
 						</li>	
 						<li>
-							<a href="../thermolog.php" class="mainmenu"><img src="../images/icons32x32/log.png" alt="Log Datei" title="Log Datei"></a>
+							<a href="../thermolog.php" class="mainmenu"><img src="../images/icons32x32/log.png" alt="Log File" title="Log File"></a>
 						</li>
 						<li <?php echo $raspicam_start;?>>
 							<a href="#" id="raspicam_button" class="mainmenu"><img src="../images/icons32x32/raspicam.png" alt="RaspiCam" title="RaspiCam"></a>
@@ -93,7 +93,7 @@ $document_root = getenv('DOCUMENT_ROOT');
 							<a href="#" id="ThermoPlot_button" class="mainmenu"><img src="../images/icons32x32/chart.png" alt="TempGraph" title="TempGraph"></a>
 						</li>				
 						<li>
-							<div id="newlogmenu"><a href="../control/new_log_file.php" class="mainmenu" style="text-align:left;"><b>NEUES LOGFILE ERSTELLEN</b></a></div>
+							<div id="newlogmenu"><a href="../control/new_log_file.php" class="mainmenu" style="text-align:left;"><b>Create New Log File</b></a></div>
 						</li>
 					</ul>
 				</nav>

@@ -1,6 +1,6 @@
 <?php
 //-----------------------------------------------------------------------------------
-// Config einlesen ##################################################################
+// Read config #****#################################################################
 //-----------------------------------------------------------------------------------
 
 function getConfig ($filename, $commentchar) {
@@ -41,7 +41,7 @@ function getConfig ($filename, $commentchar) {
 }
 
 //-----------------------------------------------------------------------------------
-// Config Pfad ######################################################################
+// Config Path ######################################################################
 //-----------------------------------------------------------------------------------
 
 function getConfigPath(){
@@ -49,7 +49,7 @@ function getConfigPath(){
 }
 
 //-----------------------------------------------------------------------------------
-// Temperatur Pfad ##################################################################
+// Temperature Path #################################################################
 //-----------------------------------------------------------------------------------
 
 function getCurrentTempPath(){
@@ -64,7 +64,7 @@ function getCurrentTempPath(){
 }
 
 //-----------------------------------------------------------------------------------
-// Aktueller Name des Logfiles ######################################################
+// Current logfile name #############################################################
 //-----------------------------------------------------------------------------------
 
 function getCurrentLogFileName(){
@@ -83,7 +83,7 @@ function getCurrentLogFileName(){
 }
 
 //----------------------------------------------------------------------------------- 
-// Logfile Verzeichnis auslesen #####################################################
+// Read Logfile directory ###########################################################
 //-----------------------------------------------------------------------------------
 
 function getLogfiles() {
@@ -134,19 +134,19 @@ function getLogfiles() {
 function writeTmpMinMaxFile($tmp_min_max_value, $tmpFile) {
 
 	$fp = @fopen($tmpFile . '_phptmp', "w+");
-	if(!$fp) die("Temperaturen.csv konnte nicht erstellt werden!");
+	if(!$fp) die("Temperaturen.csv could not be created!");
 	fwrite($fp, $tmp_min_max_value);
 	fflush($fp);
 	fclose ($fp);
 	rename($tmpFile . '_phptmp', $tmpFile);
 }
 //----------------------------------------------------------------------------------- 
-// Funktion um SESSION Variablen neu zu laden #######################################
+// Functions to reload SESSION variables ############################################
 //----------------------------------------------------------------------------------- 
 
 function session($configfile) {
 	if(get_magic_quotes_runtime()) set_magic_quotes_runtime(0); 
-	$ini = getConfig("".$configfile."", ";");  // dabei ist ; das zeichen für einen kommentar. kann geändert werden.	
+	$ini = getConfig("".$configfile."", ";");  // ; is the character for comments. Can be changed	
 	for ($i = 0; $i <= 7; $i++){
 		$_SESSION["color_ch".$i] = $ini['plotter']['color_ch'.$i];
 		$_SESSION["temp_min".$i] = $ini['temp_min']['temp_min'.$i];  
@@ -156,7 +156,6 @@ function session($configfile) {
 		$_SESSION["ch_show".$i] = $ini['ch_show']['ch'.$i];
 	}
 	$_SESSION["color_pit"] = $ini['plotter']['color_pit'];
-	$_SESSION["color_pitsoll"] = $ini['plotter']['color_pitsoll'];
 	$_SESSION["plot_start"] = $ini['ToDo']['plot_start'];
 	$_SESSION["plotname"] = $ini['plotter']['plotname'];
 	$_SESSION["plotsize"] = $ini['plotter']['plotsize'];
@@ -178,7 +177,6 @@ function session($configfile) {
 	$_SESSION["pitmaster"] = $ini['filepath']['pitmaster'];
 	$_SESSION["showcpulast"] = $ini['Hardware']['showcpulast'];
 	$_SESSION["checkUpdate"] = $ini['update']['checkupdate'];
-	$_SESSION["check_update_url"] = $ini['update']['check_update_url'];
 	if (isset($_SESSION["webGUIversion"])){
 		if ($_SESSION["checkUpdate"] == "True"){
 			$check_update = updateCheck("".$_SESSION["webGUIversion"]."");
@@ -189,10 +187,11 @@ function session($configfile) {
 	}else{
 		$_SESSION["updateAvailable"] = "";
 	}
-	if(!isset($_SESSION["websoundalert"])){ $_SESSION["websoundalert"] = "True";}	
+	if(!isset($_SESSION["websoundalert"])){ $_SESSION["websoundalert"] = "True";}
+	$_SESSION["temp_units"] = $ini['plotter']['temp_units'];	
 }
 //-----------------------------------------------------------------------------------
-// Überprüfen ob SessionVariablen existieren ########################################
+// Check if session variables exist #################################################
 //-----------------------------------------------------------------------------------
 
 function checkSession(){
@@ -233,8 +232,8 @@ function checkSession(){
 
 function restoreConfig($newconfig,$oldconfig) {
 	if(get_magic_quotes_runtime()) set_magic_quotes_runtime(0); 
-	$newconfigfile = getConfig("".$newconfig."", ";");  // dabei ist ; das zeichen für einen kommentar. kann geändert werden.	
-	$oldconfigfile = getConfig("".$oldconfig."", ";");  // dabei ist ; das zeichen für einen kommentar. kann geändert werden.
+	$newconfigfile = getConfig("".$newconfig."", ";");  // ";" is the symbol for a comment. can be changed.	
+	$oldconfigfile = getConfig("".$oldconfig."", ";");  // ";" is the symbol for a comment. can be changed.	
 
 	foreach($newconfigfile as $key => $value) {
 		foreach($value as $key1 => $value1) {
@@ -266,19 +265,27 @@ function getPlotConfig($plot){
 	$plot_setting .= "set xdata time;";
 	$plot_setting .= "set timefmt \\\"%d.%m.%y %H:%M:%S\\\";";
 	$plot_setting .= "set format x \\\"%H:%M\\\";";
-	$plot_setting .= "set xlabel \\\"Uhrzeit\\\";";
-	$plot_setting .= "set y2label \\\"Temperatur [°C]\\\";";
+	$plot_setting .= "set xlabel \\\"Time\\\";";
+	if ($_SESSION["temp_units"] == "F"){
+		$plot_setting .= "set y2label \\\"Temperature [°F]\\\";";
+	}else{
+		$plot_setting .= "set y2label \\\"Temperature [°C]\\\";";
+	}
 	$plot_setting .= "set y2range [".$_SESSION["plotbereich_min"].":".$_SESSION["plotbereich_max"]."];";
 	$plot_setting .= "set xtics nomirror;";
 	$plot_setting .= "set y2tics nomirror;";
 	if ($_SESSION["plot_pit"] == "True") {
+		$plot .= ", '/var/log/WLAN_Thermo/TEMPLOG.csv' every ::1 using 1:10 with lines lw 2 lc rgbcolor '" . $_SESSION["color_pit"] ."' t 'Pitmaster %' axes x1y1";
 		$plot_setting .= "set ylabel \\\"Pitmaster %\\\";";
 		$plot_setting .= 'set yrange ["0":"105"];';
-		$plot_setting .= "set ytics nomirror;";	
-		$plot .= ", '/var/log/WLAN_Thermo/TEMPLOG.csv' every ::1 using 1:11 with lines lw 2 lc rgbcolor '".$_SESSION["color_pitsoll"]."' t 'Pitmaster Sollwert'  axes x1y2";
-		$plot .= ", '/var/log/WLAN_Thermo/TEMPLOG.csv' every ::1 using 1:10 with lines lw 2 lc rgbcolor '".$_SESSION["color_pit"]."' t 'Pitmaster %' axes x1y1";
+		$plot_setting .= "set ytics nomirror;";
 	}else{
-		$plot_setting .= "set ylabel \\\"Temperatur [°C]\\\";";
+//		$plot_setting .= "set ylabel \\\"Temperature [°C]\\\";";
+		if ($_SESSION["temp_units"] == "F"){
+			$plot_setting .= "set ylabel \\\"Temperature [°F]\\\";";
+		}else{
+			$plot_setting .= "set ylabel \\\"Temperature [°C]\\\";";
+		}
 		$plot_setting .= "set yrange [".$_SESSION["plotbereich_min"].":".$_SESSION["plotbereich_max"]."];";
 		$plot_setting .= "set ytics nomirror;";		
 	}	
@@ -286,7 +293,7 @@ function getPlotConfig($plot){
 	return $plot_setting;
 }
 //------------------------------------------------------------------------------------------------------------------------------------- 
-// Funktion zum Download einer URL-Datei ##############################################################################################
+// Function to download a URL file ####################################################################################################
 //-------------------------------------------------------------------------------------------------------------------------------------
 
 function download($url) {
@@ -304,13 +311,13 @@ function download($url) {
 //-------------------------------------------------------------------------------------------------------------------------------------
 
 function updateCheck($version) {
-	$check_update_url = $_SESSION["check_update_url"]; //Update Server
-	$file_headers = @get_headers($updatecheck_url);
+	$update_url = "http://www.wlanthermo.com/update/version.php"; //Update Server
+	$file_headers = @get_headers($update_url);
 	if($file_headers[0] == 'HTTP/1.1 404 Not Found') {
 		//echo "Server nicht erreichbar";
 	}else{
 		//echo "File existiert";
-		$check_update_string = download("".$check_update_url."");
+		$check_update_string = download("".$update_url."");
 		$check_update_array = parse_ini_string($check_update_string);
 		if (isset($check_update_array['version'])) {
 			$webGUIversion = $check_update_array['version'];
@@ -332,7 +339,7 @@ function updateCheck($version) {
 } 
 
 //------------------------------------------------------------------------------------------------------------------------------------- 
-// Funktion zum schreiben der ini Datei ###############################################################################################
+// Function to write the ini file #####################################################################################################
 //-------------------------------------------------------------------------------------------------------------------------------------
 
 function write_ini($inipath, $ini) {
@@ -350,7 +357,7 @@ function write_ini($inipath, $ini) {
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------- 
-// Funktion für wifi.php ##############################################################################################################
+// Function for wifi.php ##############################################################################################################
 //-------------------------------------------------------------------------------------------------------------------------------------
 
 function ConvertToChannel($freq) {

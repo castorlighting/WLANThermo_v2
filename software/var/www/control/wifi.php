@@ -17,7 +17,7 @@ if(isset($_GET['page'])) {
 	</div>
 	<div class="wifi_menu">
 		<input class="button" type="button" value="WiFi Info" name="wlan0_info" onclick="document.location='?page='+this.name" />
-		<input class="button" type="button" value="Einstellungen" name="wpa_conf" onclick="document.location='?page='+this.name" />
+		<input class="button" type="button" value="Settings" name="wpa_conf" onclick="document.location='?page='+this.name" />
 	</div>
 
 <div class="wifi_content">
@@ -100,7 +100,7 @@ switch($page) {
 			exec('ifconfig wlan0 | grep -i running | wc -l',$test);
 			if($test[0] == 1) {
 				exec('sudo ifdown wlan0',$return);
-				echo '<p>Bitte warten...</p><script type="text/Javascript">window.setTimeout("document.location=\"?page=wlan0_info\"", 5000)</script>';
+				echo '<p>Please wait...</p><script type="text/Javascript">window.setTimeout("document.location=\"?page=wlan0_info\"", 5000)</script>';
 			} else {
 				echo 'Interface already down';
 			}
@@ -108,13 +108,13 @@ switch($page) {
 			exec('ifconfig wlan0 | grep -i running | wc -l',$test);
 			if($test[0] == 0) {
 				exec('sudo ifup wlan0',$return);
-				echo '<p>Bitte warten...</p><script type="text/Javascript">window.setTimeout("document.location=\"?page=wlan0_info\"", 5000)</script>';
+				echo '<p>Please wait...</p><script type="text/Javascript">window.setTimeout("document.location=\"?page=wlan0_info\"", 5000)</script>';
 			} else {
 				echo 'Interface already up';
 			}
 		} elseif(isset($_POST['ifdown_up_wlan0'])) {
 			exec('sudo ifdown wlan0 && sudo ifup wlan0',$return);
-			echo '<p>Bitte warten...</p><script type="text/Javascript">window.setTimeout("document.location=\"?page=wlan0_info\"", 5000)</script>';
+			echo '<p>Please wait...</p><script type="text/Javascript">window.setTimeout("document.location=\"?page=wlan0_info\"", 5000)</script>';
 		}
 	//print_r($strWlan0);
 	echo '<div class="infobox">

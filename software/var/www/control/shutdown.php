@@ -28,7 +28,7 @@ if(isset($_POST["shutdown"])) {
 
 		write_ini($inipath, $ini);
 	echo "<div class=\"infofield\">";
-		echo "  <head> <meta http-equiv=\"refresh\" content=\"1;URL='about:blank'\"> </head> <body> <h2>RaspberryPi wird heruntergefahren...</h2></body>";	
+		echo "  <head> <meta http-equiv=\"refresh\" content=\"1;URL='about:blank'\"> </head> <body> <h2>RaspberryPi will be shut down...</h2></body>";	
 	echo "</div>";
 //-------------------------------------------------------------------------------------------------------------------------------------
 // Zurück Button auswerten ############################################################################################################
@@ -43,12 +43,12 @@ if(isset($_POST["shutdown"])) {
 		exec("/usr/bin/touch /var/www/tmp/reboot",$output);
 	echo "<div class=\"infofield\">";
 		
-		echo "  <head> <meta http-equiv=\"refresh\" content=\"1;URL='../index.php'\"> </head> <body> <h2>RaspberryPi wird neu gestartet...</h2></body>";	
+		echo "  <head> <meta http-equiv=\"refresh\" content=\"1;URL='../index.php'\"> </head> <body> <h2>RaspberryPi is restarted...</h2></body>";	
 	echo "</div>";
 
 }elseif(isset($_POST["back"])) {
 	echo "<div class=\"infofield\">";
-	 echo "  <head> <meta http-equiv=\"refresh\" content=\"1;URL='../index.php'\"> </head> <body> <h2>Verlassen der Seite ohne neu start des RaspberryPi!...</h2></body>";
+	 echo "  <head> <meta http-equiv=\"refresh\" content=\"1;URL='../index.php'\"> </head> <body> <h2>Shutdown cancelled...</h2></body>";
 	echo "</div>";
 }elseif($_GET["id"] == "shutdown"){
 
@@ -58,9 +58,9 @@ if(isset($_POST["shutdown"])) {
 	?>
 
 <div id="shutdown">
-	<h1>RASPBERRY&nbsp;PI&nbsp;&nbsp;HERUNTERFAHREN</h1>
+	<h1>RASPBERRY&nbsp;PI&nbsp;&nbsp;SHUT&nbsp;DOWN</h1>
 	<form action="shutdown.php" method="post" >
-		<br><p><b>M&ouml;chten Sie den RaspberryPi herunterfahren?</b></p>								
+		<br><p><b>Are you sure you want to shutdown the Raspberry Pi?</b></p>								
 			<table align="center" width="80%"><tr><td width="20%"></td>
 				<td align="center"> <input type="submit" class=button_yes name="shutdown"  value="">
 					<input type="submit" class=button_back name="back"  value=""> </td>
@@ -72,9 +72,9 @@ if(isset($_POST["shutdown"])) {
 }elseif($_GET["id"] == "reboot"){
 ?>
 <div id="shutdown">
-	<h1>RASPBERRY&nbsp;PI&nbsp;&nbsp;NEU STARTEN</h1>
+	<h1>RASPBERRY&nbsp;PI&nbsp;&nbsp;REBOOT</h1>
 	<form action="shutdown.php" method="post" >
-		<br><p><b>M&ouml;chten Sie den RaspberryPi neu starten?</b></p>								
+		<br><p><b>Are you sure you want to reboot the Raspberry Pi?</b></p>								
 			<table align="center" width="80%"><tr><td width="20%"></td>
 				<td align="center"> <input type="submit" class=button_yes name="reboot"  value="">
 					<input type="submit" class=button_back name="back"  value=""> </td>
