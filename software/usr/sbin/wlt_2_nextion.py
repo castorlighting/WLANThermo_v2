@@ -685,7 +685,7 @@ def pitmaster_setvalues(pit_ch = None, pit_set = None, pit_lid=  None, pit_on = 
             if pit_on is not None:
                 newconfig.set('ToDo','pit_on', ['False', 'True'][int(pit_on)])
             if pit_pid is not None:
-                newconfig.set('Pitmaster','pit_controller_type', ['False', 'PID'][int(pit_pid)])
+                newconfig.set('Pitmaster','pit_controller_type', ['False', 'PID', 'FRT'][int(pit_pid)])
             if pit_type is not None:
                 newconfig.set('Pitmaster','pit_type', ['fan', 'servo', 'io', 'io_pwm', 'fan_pwm'][int(pit_type)])
                 
@@ -983,7 +983,7 @@ def NX_display():
     values['main.pit_lid.val'] = int(pitconf['open_lid_detection'])
     values['main.pit_on.val'] = int(pitconf['on'])
     values['main.pit_inverted.val'] = int(pitconf['inverted'])
-    values['main.pit_pid.val'] = {'False': 0, 'PID': 1}[pitconf['controller_type']]
+    values['main.pit_pid.val'] = {'False': 0, 'PID': 1, 'FRT': 2}[pitconf['controller_type']]
     # Displayeinstellungen sollten lokal sein und nur für uns
     # Ansonsten müsste man hier noch mal ran 
     values['main.dim.val'] = int(display['dim'])
@@ -1202,7 +1202,7 @@ def NX_display():
                 if not new_pitconf['on']:
                     values['main.pit_power.val'] = 0
             if pitconf['controller_type'] != new_pitconf['controller_type']:
-                values['main.pit_pid.val'] = {'False': 0, 'PID': 1}[new_pitconf['controller_type']]
+                values['main.pit_pid.val'] = {'False': 0, 'PID': 1, 'FRT': 2}[new_pitconf['controller_type']]
             if pitconf['type'] != new_pitconf['type']:
                 values['main.pit_type.val'] = pit_types[new_pitconf['type']]
             

@@ -31,6 +31,7 @@ import threading
 import signal
 import traceback
 import gettext
+import math
 
 gettext.install('wlt_2_pitmaster', localedir='/usr/share/WLANThermo/locale/', unicode=True)
 
@@ -595,6 +596,22 @@ def main():
                         pit_new  = pit_pid_min
                     #PID End Block PID Regler
                 
+                elif (controller_type == "FRT") and (not pit_open_lid_detected): #Bedingung fuer PID
+                    dif = pit_set - pit_now
+                    out_old = bbqpit.pit_out
+                    logger.debug(u'FRT - set:{},previous:{},pause:{},dif:{}'.format(pit_set, out_old, pit_pause, dif))
+                    pit_new = math.sqrt(pit_set * abs(out_old / 2 + (pit_pause * dif)))
+                    logger.debug(u'FRT - new:{}'.format(pit_new))
+                    pit_sim = math.sqrt(pit_set * abs(out_old / 2 + (1.0 * dif)))
+                    logger.debug(u'FRT - sim_1:{}'.format(pit_sim))
+                    pit_sim = math.sqrt(pit_set * abs(out_old / 2 + (0.03 * dif)))
+                    logger.debug(u'FRT - sim_0.03:{}'.format(pit_sim))
+                    if pit_new  > pit_pid_max:
+                        pit_new  = pit_pid_max
+                    elif pit_new  < pit_pid_min:
+                        pit_new  = pit_pid_min
+                    #PID End Block PID Regler
+                    
                 pit_change = pit_new - bbqpit.pit_out
                 
                 if pit_change > 0 and pit_ratelimit_rise > 0:
